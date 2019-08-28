@@ -9,3 +9,5 @@ gsutil label set bucketlabels.json gs://gcp-ls-d4nt3/ # for setting tag on that 
 gsutil label ch -l "extralabel:extravalue" gs://gcp-ls-d4nt3/ # for adding extra tag value where ch = change, -l for label
 gsutil versioning get gs://gcp-ls-d4nt3/ # command for get versioning status
 gsutil versioning set on gs://gcp-ls-d4nt3/ # command for set versioning on/off
+gsutil acl ch -u AllUsers:R gs://gcp-ls-d4nt3/test # command for change permission on file, where acl-access control list, ch - change, R- read
+
