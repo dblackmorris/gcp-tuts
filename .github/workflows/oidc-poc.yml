@@ -1,0 +1,68 @@
+name: GCP OIDC proof of concept
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authenticate:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      GCP_POC_BUCKET: ${{ vars.GCP_POC_BUCKET }}
+    steps:
+      - name: Check repository variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in GCP_PROJECT_ID GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error title=Missing repository variable::Set repository variable ${name}."
+              exit 1
+            fi
+          done
+          if [[ "$GCP_POC_BUCKET" == gs://* || "$GCP_POC_BUCKET" == */* ]]; then
+            echo "::error title=Invalid bucket variable::GCP_POC_BUCKET must contain only the bucket name."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Exchange GitHub OIDC token for Google credentials
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_lifetime: 300s
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Verify service account token issuance
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth print-access-token >/dev/null
+          echo "GitHub OIDC exchange and Google service account token issuance succeeded."
+
+      - name: Verify optional Cloud Storage access
+        if: env.GCP_POC_BUCKET != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud storage ls "gs://${GCP_POC_BUCKET}"
